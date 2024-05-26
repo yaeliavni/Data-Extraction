@@ -1,0 +1,44 @@
+import requests
+import pandas as pd
+from openpyxl import load_workbook
+from io import BytesIO
+
+def get_data(id_code):
+    url = f"https://apis.cbs.gov.il/series/data/path?id={id_code}&format=xls&download=true"
+
+    params = {
+        "id": id_code,  #path to data - id code
+        "format": "xls",
+        "download": "true"
+    }
+
+    response = requests.get(url, params=params)
+    # Specify the engine when reading the Excel file
+    data = pd.read_excel(BytesIO(response.content), engine='openpyxl')
+
+    data_2022 = data[data['date'].str.startswith('2022-')]
+
+    return data_2022
+
+#Load your Excel file with id codes and descriptions
+df_codes = pd.read_excel('top_code 37 for ozar.xlsx')
+
+wb = load_workbook(filename='rdata_new_copy.xlsx')
+
+# Create a dictionary to map time_code to sheet names
+time_code_dict = {1: 'yearly', 2: 'quarterly', 3: 'monthly'}
+
+for index, row in df_codes.iterrows():
+    sheet_name = time_code_dict[row['time_code']]
+    ws = wb[sheet_name]
+    data_2022 = get_data(row['code_sidr'])
+    last_row = ws.max_row
+    for i, (date, data) in enumerate(data_2022.items()):
+        #התאמה בין הטורי הסבר לכותרות העמודות בקובץ שלנו
+        for top_code in ['top_code2', 'top_code3', 'top_code4', 'top_code5', 'top_code6']:
+            for col in ws.iter_cols(min_row=1, max_row=1):
+                if col[0].value == row[top_code]:
+                    column = col[0].column
+                    ws.cell(row=last_row+i+1, column=column, value=data['index'])
+
+wb.save('rdata_new_copy.xlsx')
